@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using joker_api.Models.Entities;
 using joker_api.Services.Interfaces;
-using joker_api.Services.Services;
-
 
 namespace joker_api.Controllers;
 

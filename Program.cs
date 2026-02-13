@@ -33,9 +33,6 @@ try
             })
         .CreateLogger();
 
-    // Log the database connection string for debugging purposes (remove this in production)
-    Log.Debug("Database Connection String: {ConnectionString}", dbConnectionString);
-
     #endregion
 
     // Log that the application is starting
