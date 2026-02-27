@@ -2,6 +2,9 @@ using Serilog;
 using dotenv.net;
 using joker_api.Services.Interfaces;
 using joker_api.Services.Services;
+using joker_api.Data.Context;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Internal;
 
 #region - App-wide try-catch block to catch unhandled exceptions and log them
 
@@ -42,22 +45,25 @@ try
 
     builder.Services.AddControllers();
     builder.Services.AddOpenApi();
+    builder.Services.AddDbContext<AppDbContext>(options =>
+    {
+        options.UseSqlServer(dbConnectionString);
+    });
     builder.Services.AddScoped<IJokeService, JokeService>();
 
     // Add services to the container.
     var app = builder.Build();
 
-
-
-    // Configure the HTTP request pipeline.
-    app.UseHttpsRedirection();
-
-    if (app.Environment.IsDevelopment())
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseExceptionHandler("/Error");
+        app.UseHsts();
+    }
+    else
     {
         app.UseDeveloperExceptionPage();
-
+        app.UseMigrationsEndPoint();
         app.MapOpenApi();
-
         app.UseSwaggerUI(options =>
         {
             options.SwaggerEndpoint("/openapi/v1.json", "Joker API V1");
@@ -65,10 +71,25 @@ try
         });
     }
 
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+
+        var context = services.GetRequiredService<AppDbContext>();
+
+        context.Database.EnsureCreated();
+
+        // Migrate the database if there are any pending migrations
+        if (context.Database.GetPendingMigrations().Any())
+        {
+            context.Database.Migrate();
+        }
+    }
+
+    app.UseSerilogRequestLogging();
+    app.UseHttpsRedirection();
     app.MapControllers();
-
     app.Run();
-
 }
 catch (Exception ex)
 {
@@ -77,8 +98,3 @@ catch (Exception ex)
 }
 
 #endregion
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
