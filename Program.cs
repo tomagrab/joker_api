@@ -43,7 +43,10 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
+    builder.Host.UseSerilog();
+
     builder.Services.AddControllers();
+    builder.Services.AddProblemDetails();
     builder.Services.AddOpenApi();
     builder.Services.AddDbContext<AppDbContext>(options =>
     {
@@ -56,7 +59,8 @@ try
 
     if (!app.Environment.IsDevelopment())
     {
-        app.UseExceptionHandler("/Error");
+        app.UseExceptionHandler("/error");
+        app.UseStatusCodePages();
         app.UseHsts();
     }
     else
