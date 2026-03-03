@@ -1,5 +1,3 @@
-
-
 using joker_api.Data.Context;
 using joker_api.Models.Entities;
 using joker_api.Services.Interfaces;

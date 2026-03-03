@@ -4,7 +4,7 @@ using joker_api.Services.Interfaces;
 using joker_api.Services.Services;
 using joker_api.Data.Context;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Internal;
+using System.Text.Json;
 
 #region - App-wide try-catch block to catch unhandled exceptions and log them
 
@@ -45,7 +45,12 @@ try
 
     builder.Host.UseSerilog();
 
-    builder.Services.AddControllers();
+    builder.Services.AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            options.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+        });
     builder.Services.AddProblemDetails();
     builder.Services.AddOpenApi();
     builder.Services.AddDbContext<AppDbContext>(options =>
@@ -53,6 +58,7 @@ try
         options.UseSqlServer(dbConnectionString);
     });
     builder.Services.AddScoped<IJokeService, JokeService>();
+    builder.Services.AddScoped<IStonlyAiService, StonlyAiService>();
 
     // Add services to the container.
     var app = builder.Build();
