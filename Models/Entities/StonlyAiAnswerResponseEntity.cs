@@ -8,5 +8,5 @@ public class StonlyAiAnswerResponseEntity
     public required StonlyAiAnswerResponseEntityMetadataEntity QueryMetadata { get; set; }
     public required string Answer { get; set; }
     public required StonlyAiAnswerMetadataEntity AnswerMetadata { get; set; }
-    public required string Status { get; set; }
+    public required StonlyAiAnswerResultStatusEntity Status { get; set; }
 }

@@ -1,89 +1,182 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using joker_api.Models.Common;
 using joker_api.Models.Entities;
 using joker_api.Services.Interfaces;
 
 namespace joker_api.Services.Services;
 
-public class StonlyAiService(ILogger<StonlyAiService> logger) : IStonlyAiService
+public class StonlyAiService(HttpClient httpClient, ILogger<StonlyAiService> logger) : IStonlyAiService
 {
+    private readonly HttpClient _httpClient = httpClient;
     private readonly ILogger<StonlyAiService> _logger = logger;
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
 
-    public async Task<StonlyAiSearchResponseEntity> StonlyAiSearchAsync(StonlyAiSearchRequestEntity request)
+    public async Task<CommonApiResponseModel<StonlyAiSearchResponseEntity>> StonlyAiSearchAsync(StonlyAiSearchRequestEntity request, CancellationToken cancellationToken = default)
     {
         try
         {
-            using var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("accept", "application/json");
-            httpClient.DefaultRequestHeaders.Add("Authorization", "Basic dG9tbXkuZ3JhYm93c2tpQHZlbG9jaXRvci5jb206M29acUgzUkVBdW5Meks5M3pNekZtVWVWSDRmSkRRc3VHNjB4");
+            using var response = await _httpClient.PostAsJsonAsync("ai/search", request, _jsonOptions, cancellationToken);
 
-            // log the headers for debugging
-            foreach (var header in httpClient.DefaultRequestHeaders)
+            if (!response.IsSuccessStatusCode)
             {
-                _logger.LogInformation("Header: {Key} = {Value}", header.Key, string.Join(", ", header.Value));
+                return new CommonApiResponseModel<StonlyAiSearchResponseEntity>
+                (
+                    false,
+                    message: $"Stonly AI search request failed with status code {response.StatusCode}."
+                );
             }
 
-            var options = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-            };
+            var data = await response.Content.ReadFromJsonAsync<StonlyAiSearchResponseEntity>
+            (
+                _jsonOptions,
+                cancellationToken: cancellationToken
+            );
 
-            var response = await httpClient.PostAsJsonAsync("https://public.stonly.com/api/v3/ai/search", request, options);
-
-            // log the response status code for debugging
-            _logger.LogInformation("Response: {Response}", response);
-
-            var rawBody = await response.Content.ReadAsStringAsync();
-            _logger.LogInformation("Raw Response Body: {Body}", rawBody);
-
-            var stonlyAiSearchResponse = await response.Content.ReadFromJsonAsync<StonlyAiSearchResponseEntity>(options) ?? throw new Exception("Failed to search Stonly AI.");
-
-            // log the response content for debugging
-            _logger.LogInformation("Response Content: {Content}", JsonSerializer.Serialize(stonlyAiSearchResponse, options));
-
-            return stonlyAiSearchResponse;
+            return data is null
+                ? new CommonApiResponseModel<StonlyAiSearchResponseEntity>(false, message: "Stonly AI search returned no data.")
+                : new CommonApiResponseModel<StonlyAiSearchResponseEntity>(true, data: data);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new CommonApiResponseModel<StonlyAiSearchResponseEntity>(false, message: "Operation was canceled.");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred while searching Stonly AI.");
-            throw; // Rethrow the exception to be handled by the global exception handler
+            return new CommonApiResponseModel<StonlyAiSearchResponseEntity>(false, message: "Stonly search failed.");
         }
     }
 
-    public async Task<StonlyAiAnswerResponseEntity> StonlyAiAnswerAsync(string questionAnswerId)
+    public async Task<CommonApiResponseModel<StonlyAiAnswerResponseEntity>> StonlyAiAnswerAsync(string questionAnswerId, CancellationToken cancellationToken = default)
     {
         try
         {
-            // Example cURL:
-            /*
-                curl -X GET "https://public.stonly.com/api/v3/ai/answer?questionAnswerId=c13b5bc0-ce71-4b32-bf67-bd589e1ec8e9" -H "accept: application/json" -H "Authorization: Basic dG9tbXkuZ3JhYm93c2tpQHZlbG9jaXRvci5jb206M29acUgzUkVBdW5Meks5M3pNekZtVWVWSDRmSkRRc3VHNjB4"
-            */
+            var url = $"ai/answer?questionAnswerId={Uri.EscapeDataString(questionAnswerId)}";
+            using var response = await _httpClient.GetAsync(url, cancellationToken);
 
-            using var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("accept", "application/json");
-            httpClient.DefaultRequestHeaders.Add("Authorization", "Basic dG9tbXkuZ3JhYm93c2tpQHZlbG9jaXRvci5jb206M29acUgzUkVBdW5Meks5M3pNekZtVWVWSDRmSkRRc3VHNjB4");
-            var url = $"https://public.stonly.com/api/v3/ai/answer?questionAnswerId={questionAnswerId}";
-            var httpResponse = await httpClient.GetAsync(url);
-
-            var options = new JsonSerializerOptions
+            if (response.StatusCode is not HttpStatusCode.OK and not HttpStatusCode.Accepted)
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-            };
+                return new CommonApiResponseModel<StonlyAiAnswerResponseEntity>
+                (
+                    false,
+                    message: $"Stonly AI answer request failed with status code {response.StatusCode}."
+                );
+            }
 
-            var rawBody = await httpResponse.Content.ReadAsStringAsync();
-            _logger.LogInformation("Raw Response Body: {Body}", rawBody);
-            var stonlyAiAnswerResponse = await httpResponse.Content.ReadFromJsonAsync<StonlyAiAnswerResponseEntity>(options) ?? throw new Exception("Failed to get answer from Stonly AI.");
+            var data = await response.Content.ReadFromJsonAsync<StonlyAiAnswerResponseEntity>
+            (
+                _jsonOptions,
+                cancellationToken: cancellationToken
+            );
 
-            return stonlyAiAnswerResponse;
+            return data is null
+                ? new CommonApiResponseModel<StonlyAiAnswerResponseEntity>(false, message: "Stonly AI answer returned no data.")
+                : new CommonApiResponseModel<StonlyAiAnswerResponseEntity>(true, data: data);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("Stonly AI answer operation was canceled.");
+            return new CommonApiResponseModel<StonlyAiAnswerResponseEntity>(false, message: "Operation was canceled.");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred while getting answer from Stonly AI.");
-            throw; // Rethrow the exception to be handled by the global exception handler
+            return new CommonApiResponseModel<StonlyAiAnswerResponseEntity>(false, message: "Stonly AI answer failed.");
+        }
+    }
+
+    public async Task<CommonApiResponseModel<StonlyAiAnswerResultStatusEntity>> StonlyAiGetAnswerResultStatusAsync(string questionAnswerId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var answerResponse = await StonlyAiAnswerAsync(questionAnswerId, cancellationToken);
+            var status = answerResponse.Data?.Status ?? StonlyAiAnswerResultStatusEntity.FAILED;
+
+            return new CommonApiResponseModel<StonlyAiAnswerResultStatusEntity>(true, data: status);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("Stonly AI get answer status operation was canceled.");
+            return new CommonApiResponseModel<StonlyAiAnswerResultStatusEntity>(false, message: "Operation was canceled.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while getting answer status from Stonly AI.");
+            return new CommonApiResponseModel<StonlyAiAnswerResultStatusEntity>(false, message: "Stonly AI get answer status failed.");
+        }
+    }
+
+    public async Task<CommonApiResponseModel<StonlyAiAnswerResponseEntity>> StonlyAiSearchAndAnswerAsync(StonlyAiSearchRequestEntity request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var search = await StonlyAiSearchAsync(request, cancellationToken);
+            if (!search.Success || search.Data is null)
+            {
+                return new CommonApiResponseModel<StonlyAiAnswerResponseEntity>
+                (
+                    false,
+                    message: "Stonly AI search failed."
+                );
+            }
+
+            var questionAnswerId = search.Data.QuestionAnswerId;
+
+            var deadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(1);
+            var delay = TimeSpan.FromSeconds(1);
+
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                var answer = await StonlyAiAnswerAsync(questionAnswerId, cancellationToken);
+                if (!answer.Success || answer.Data is null)
+                {
+                    return new CommonApiResponseModel<StonlyAiAnswerResponseEntity>
+                    (
+                        false,
+                        message: answer.Message ?? "Stonly AI answer retrieval failed."
+                    );
+                }
+
+                if (answer.Data.Status == StonlyAiAnswerResultStatusEntity.COMPLETED)
+                {
+                    return answer;
+                }
+
+                if (answer.Data.Status == StonlyAiAnswerResultStatusEntity.FAILED)
+                {
+                    return new CommonApiResponseModel<StonlyAiAnswerResponseEntity>
+                    (
+                        false,
+                        message: "Stonly AI answer processing failed."
+                    );
+                }
+
+                await Task.Delay(delay, cancellationToken);
+                delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 5));
+            }
+
+            return new CommonApiResponseModel<StonlyAiAnswerResponseEntity>
+            (
+                false,
+                message: "Stonly AI answer processing timed out."
+            );
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("Stonly AI search and answer operation was canceled.");
+            return new CommonApiResponseModel<StonlyAiAnswerResponseEntity>(false, message: "Operation was canceled.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while searching and answering Stonly AI.");
+            return new CommonApiResponseModel<StonlyAiAnswerResponseEntity>(false, message: "Stonly AI search and answer failed.");
         }
     }
 }

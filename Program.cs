@@ -5,6 +5,10 @@ using joker_api.Services.Services;
 using joker_api.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using joker_api.Models.Common;
+using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
 
 #region - App-wide try-catch block to catch unhandled exceptions and log them
 
@@ -45,11 +49,29 @@ try
 
     builder.Host.UseSerilog();
 
+    builder.Services.Configure<StonlyOptionsModel>(builder.Configuration.GetSection(StonlyOptionsModel.SectionName));
+
+    builder.Services.AddHttpClient<IStonlyAiService, StonlyAiService>((sp, client) =>
+    {
+        var options = sp.GetRequiredService<IOptions<StonlyOptionsModel>>().Value;
+
+        client.BaseAddress = new Uri(options.BaseUrl);
+        client.DefaultRequestHeaders.Accept.Clear();
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        if (!string.IsNullOrEmpty(options.AuthorizationHeader))
+        {
+            client.DefaultRequestHeaders.Add("Authorization", options.AuthorizationHeader);
+        }
+    });
+
     builder.Services.AddControllers()
         .AddJsonOptions(options =>
         {
             options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
             options.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+            options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+
         });
     builder.Services.AddProblemDetails();
     builder.Services.AddOpenApi();
@@ -58,7 +80,6 @@ try
         options.UseSqlServer(dbConnectionString);
     });
     builder.Services.AddScoped<IJokeService, JokeService>();
-    builder.Services.AddScoped<IStonlyAiService, StonlyAiService>();
 
     // Add services to the container.
     var app = builder.Build();
