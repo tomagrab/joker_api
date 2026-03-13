@@ -50,6 +50,7 @@ try
     builder.Host.UseSerilog();
 
     builder.Services.Configure<StonlyOptionsModel>(builder.Configuration.GetSection(StonlyOptionsModel.SectionName));
+    builder.Services.Configure<UserPreferencesOptionsModel>(builder.Configuration.GetSection(UserPreferencesOptionsModel.SectionName));
 
     builder.Services.AddHttpClient<IStonlyAiService, StonlyAiService>((sp, client) =>
     {
@@ -80,6 +81,7 @@ try
         options.UseSqlServer(dbConnectionString);
     });
     builder.Services.AddScoped<IJokeService, JokeService>();
+    builder.Services.AddScoped<IUserPreferencesService, UserPreferencesService>();
 
     // Add services to the container.
     var app = builder.Build();

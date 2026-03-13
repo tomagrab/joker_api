@@ -10,4 +10,21 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<JokeEntity> Jokes { get; set; }
+    public DbSet<UserPreferencesEntity> UserPreferences { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<UserPreferencesEntity>(entity =>
+        {
+            entity.HasKey(item => item.UserId);
+            entity.Property(item => item.UserId)
+                .HasMaxLength(450);
+            entity.Property(item => item.PreferencesJson)
+                .IsRequired();
+            entity.Property(item => item.UpdatedAtUtc)
+                .HasColumnType("datetimeoffset");
+        });
+    }
 }
